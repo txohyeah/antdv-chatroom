@@ -1,4 +1,5 @@
 <template>
+  <a-spin :spinning="spinning">
     <div class="chat-room">
       <div class="message-list" ref="messageList">
         <div 
@@ -18,32 +19,92 @@
       </div>
       <a-input v-model:value="inputValue" placeholder="Please input message..." />
       <div class="send-button-container">
-        <a-button class="a-button" type="primary" @click="sendMessage">Send</a-button>
+        <a-space wrap>
+          <a-button class="a-button" type="primary" @click="sendMessage">Send</a-button>
+          <a-button class="a-button" @click="clickRefresh">Refresh</a-button>
+        </a-space>
       </div>
     </div>
-  </template>
+  </a-spin>
+</template>
   
   <script>
+  import { WELCOME  } from '@/utils/constants';
+  import { send, dryrunSafe } from '@/utils/utils';
+  import { message } from 'ant-design-vue';
+
   export default {
     data() {
       return {
-        sender: 'txohyeah',
         inputValue: '',
         messages: [
-            { sender: "txohyeah", content: "Hi, Tony.", type: "outgoing" },
-            { sender: "Tony", content: "Hi, txohyeah. Nice to meet you.", type: "incoming" }
-        ]
+            { sender: "Welcome", content: WELCOME, type: "incoming" },
+        ],
+        spinning: false
       };
     },
+    computed: {
+      getSelectedProcessId() {
+        return this.$store.getters.processId
+      }
+    },
+    mounted() {
+      this.startPolling();
+    },
+    beforeUnmount() {
+      this.stopPolling();
+    },
     methods: {
-      sendMessage() {
+      startPolling() {
+        this.pollingInterval = setInterval(this.refreshMessage, 10000);
+      },
+      stopPolling() {
+        clearInterval(this.pollingInterval);
+      },
+      async sendMessage() {
         if (this.inputValue.trim()) {
-          this.messages.push({ content: this.inputValue, type: 'outgoing', sender: this.sender });
+          send(
+            this.getSelectedProcessId,
+            {
+              Action: "SAY",
+            },
+            this.inputValue
+          ) 
+          this.messages.push({ sender: this.getSelectedProcessId, content: this.inputValue, type: "outgoing" })
           this.inputValue = '';
         } else {
             alert("Please input something.")
         }
       },
+      clickRefresh() {
+        message.success('Refreshing...');
+        this.refreshMessage()
+      },
+      async refreshMessage() {
+        let results = await dryrunSafe(
+          this.getSelectedProcessId, 
+          { Action: "GetChatMessage" }
+        );
+
+        if (!results) {
+          this.spinning = false;
+          alert("Send message failed. Please try again few minutes later.")
+          return;
+        }
+
+        if (results.error) {
+          alert(results.error)
+          return
+        }
+        
+        let data = results.Messages[0].Data
+        let dataObj = JSON.parse(data);
+        
+        this.messages = [
+            { sender: "Welcome", content: WELCOME, type: "incoming" },
+        ]
+        this.messages.push(...dataObj.ChatMessageBox)
+      }
     },
   };
   </script>
