@@ -10,6 +10,7 @@ export async function connectWallet() {
       );
     } catch (error) {
       alert('You should connect to ArConnect browser extension.');
+      console.info(error)
       return false;
     }
   
